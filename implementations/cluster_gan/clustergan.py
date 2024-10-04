@@ -471,7 +471,7 @@ for epoch in range(n_epochs):
             fake_loss = bce_loss(D_gen, fake)
             d_loss = (real_loss + fake_loss) / 2
 
-        d_loss.backward()
+        d_loss.backward(retain_graph=True)
         optimizer_D.step()
 
 
