@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 
-os.makedirs("images", exist_ok=True)
+os.makedirs("cgan/images", exist_ok=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_epochs", type=int, default=200, help="number of epochs of training")
@@ -134,7 +134,7 @@ def sample_image(n_row, batches_done):
     labels = np.array([num for _ in range(n_row) for num in range(n_row)])
     labels = Variable(LongTensor(labels))
     gen_imgs = generator(z, labels)
-    save_image(gen_imgs.data, "images/%d.png" % batches_done, nrow=n_row, normalize=True)
+    save_image(gen_imgs.data, "cgan/images/%d.png" % batches_done, nrow=n_row, normalize=True)
 
 
 # ----------

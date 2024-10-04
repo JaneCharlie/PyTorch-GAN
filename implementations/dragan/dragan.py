@@ -15,7 +15,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 
-os.makedirs("images", exist_ok=True)
+os.makedirs("dragan/images", exist_ok=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_epochs", type=int, default=200, help="number of epochs of training")
@@ -146,7 +146,7 @@ def compute_gradient_penalty(D, X):
     # Random weight term for interpolation
     alpha = Tensor(np.random.random(size=X.shape))
 
-    interpolates = alpha * X + ((1 - alpha) * (X + 0.5 * X.std() * torch.rand(X.size())))
+    interpolates = alpha * X + ((1 - alpha) * (X + 0.5 * X.std() * torch.rand(X.size()).cuda()))
     interpolates = Variable(interpolates, requires_grad=True)
 
     d_interpolates = D(interpolates)
@@ -172,7 +172,7 @@ def compute_gradient_penalty(D, X):
 # ----------
 
 for epoch in range(opt.n_epochs):
-    for i, (imgs, _) in enumerate(mnist_loader):
+    for i, (imgs, _) in enumerate(dataloader):
 
         # Adversarial ground truths
         valid = Variable(Tensor(imgs.shape[0], 1).fill_(1.0), requires_grad=False)
@@ -218,7 +218,7 @@ for epoch in range(opt.n_epochs):
 
         print(
             "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-            % (epoch, opt.n_epochs, i, len(mnist_loader), d_loss.item(), g_loss.item())
+            % (epoch, opt.n_epochs, i, len(dataloader), d_loss.item(), g_loss.item())
         )
 
-    save_image(gen_imgs.data, "images/%d.png" % epoch, nrow=int(math.sqrt(opt.batch_size)), normalize=True)
+    save_image(gen_imgs.data, "dragan/images/%d.png" % epoch, nrow=int(math.sqrt(opt.batch_size)), normalize=True)
