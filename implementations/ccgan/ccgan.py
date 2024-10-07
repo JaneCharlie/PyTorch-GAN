@@ -3,6 +3,7 @@ import os
 import numpy as np
 import math
 
+
 import torchvision.transforms as transforms
 from torchvision.utils import save_image
 from PIL import Image
@@ -18,7 +19,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 
-os.makedirs("images", exist_ok=True)
+os.makedirs("images/ccgan", exist_ok=True)
+
+def weights_init_normal(m):
+    classname = m.__class__.__name__
+    if classname.find("Linear") != -1:
+        torch.nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find("BatchNorm") != -1:
+        torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
+        torch.nn.init.constant_(m.bias.data, 0.0)
+
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--n_epochs", type=int, default=200, help="number of epochs of training")
@@ -92,16 +103,20 @@ def apply_random_mask(imgs):
     return masked_imgs
 
 
+
+
+
 def save_sample(saved_samples):
     # Generate inpainted image
     gen_imgs = generator(saved_samples["masked"], saved_samples["lowres"])
     # Save sample
     sample = torch.cat((saved_samples["masked"].data, gen_imgs.data, saved_samples["imgs"].data), -2)
-    save_image(sample, "images/%d.png" % batches_done, nrow=5, normalize=True)
+    save_image(sample, "images/ccgan/%d.png" % batches_done, nrow=5, normalize=True)
 
 
 saved_samples = {}
-for epoch in range(opt.n_epochs):
+if __name__ == '__main__':
+ for epoch in range(opt.n_epochs):
     for i, batch in enumerate(dataloader):
         imgs = batch["x"]
         imgs_lr = batch["x_lr"]
