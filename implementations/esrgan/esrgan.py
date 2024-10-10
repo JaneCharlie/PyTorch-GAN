@@ -91,105 +91,105 @@ dataloader = DataLoader(
 # ----------
 #  Training
 # ----------
+if __name__ == '__main__':
+    for epoch in range(opt.epoch, opt.n_epochs):
+        for i, imgs in enumerate(dataloader):
 
-for epoch in range(opt.epoch, opt.n_epochs):
-    for i, imgs in enumerate(dataloader):
+            batches_done = epoch * len(dataloader) + i
 
-        batches_done = epoch * len(dataloader) + i
+            # Configure model input
+            imgs_lr = Variable(imgs["lr"].type(Tensor))
+            imgs_hr = Variable(imgs["hr"].type(Tensor))
 
-        # Configure model input
-        imgs_lr = Variable(imgs["lr"].type(Tensor))
-        imgs_hr = Variable(imgs["hr"].type(Tensor))
+            # Adversarial ground truths
+            valid = Variable(Tensor(np.ones((imgs_lr.size(0), *discriminator.output_shape))), requires_grad=False)
+            fake = Variable(Tensor(np.zeros((imgs_lr.size(0), *discriminator.output_shape))), requires_grad=False)
 
-        # Adversarial ground truths
-        valid = Variable(Tensor(np.ones((imgs_lr.size(0), *discriminator.output_shape))), requires_grad=False)
-        fake = Variable(Tensor(np.zeros((imgs_lr.size(0), *discriminator.output_shape))), requires_grad=False)
+            # ------------------
+            #  Train Generators
+            # ------------------
 
-        # ------------------
-        #  Train Generators
-        # ------------------
+            optimizer_G.zero_grad()
 
-        optimizer_G.zero_grad()
+            # Generate a high resolution image from low resolution input
+            gen_hr = generator(imgs_lr)
 
-        # Generate a high resolution image from low resolution input
-        gen_hr = generator(imgs_lr)
+            # Measure pixel-wise loss against ground truth
+            loss_pixel = criterion_pixel(gen_hr, imgs_hr)
 
-        # Measure pixel-wise loss against ground truth
-        loss_pixel = criterion_pixel(gen_hr, imgs_hr)
+            if batches_done < opt.warmup_batches:
+                # Warm-up (pixel-wise loss only)
+                loss_pixel.backward()
+                optimizer_G.step()
+                print(
+                    "[Epoch %d/%d] [Batch %d/%d] [G pixel: %f]"
+                    % (epoch, opt.n_epochs, i, len(dataloader), loss_pixel.item())
+                )
+                continue
 
-        if batches_done < opt.warmup_batches:
-            # Warm-up (pixel-wise loss only)
-            loss_pixel.backward()
+            # Extract validity predictions from discriminator
+            pred_real = discriminator(imgs_hr).detach()
+            pred_fake = discriminator(gen_hr)
+
+            # Adversarial loss (relativistic average GAN)
+            loss_GAN = criterion_GAN(pred_fake - pred_real.mean(0, keepdim=True), valid)
+
+            # Content loss
+            gen_features = feature_extractor(gen_hr)
+            real_features = feature_extractor(imgs_hr).detach()
+            loss_content = criterion_content(gen_features, real_features)
+
+            # Total generator loss
+            loss_G = loss_content + opt.lambda_adv * loss_GAN + opt.lambda_pixel * loss_pixel
+
+            loss_G.backward()
             optimizer_G.step()
+
+            # ---------------------
+            #  Train Discriminator
+            # ---------------------
+
+            optimizer_D.zero_grad()
+
+            pred_real = discriminator(imgs_hr)
+            pred_fake = discriminator(gen_hr.detach())
+
+            # Adversarial loss for real and fake images (relativistic average GAN)
+            loss_real = criterion_GAN(pred_real - pred_fake.mean(0, keepdim=True), valid)
+            loss_fake = criterion_GAN(pred_fake - pred_real.mean(0, keepdim=True), fake)
+
+            # Total loss
+            loss_D = (loss_real + loss_fake) / 2
+
+            loss_D.backward()
+            optimizer_D.step()
+
+            # --------------
+            #  Log Progress
+            # --------------
+
             print(
-                "[Epoch %d/%d] [Batch %d/%d] [G pixel: %f]"
-                % (epoch, opt.n_epochs, i, len(dataloader), loss_pixel.item())
+                "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f, content: %f, adv: %f, pixel: %f]"
+                % (
+                    epoch,
+                    opt.n_epochs,
+                    i,
+                    len(dataloader),
+                    loss_D.item(),
+                    loss_G.item(),
+                    loss_content.item(),
+                    loss_GAN.item(),
+                    loss_pixel.item(),
+                )
             )
-            continue
 
-        # Extract validity predictions from discriminator
-        pred_real = discriminator(imgs_hr).detach()
-        pred_fake = discriminator(gen_hr)
+            if batches_done % opt.sample_interval == 0:
+                # Save image grid with upsampled inputs and ESRGAN outputs
+                imgs_lr = nn.functional.interpolate(imgs_lr, scale_factor=4)
+                img_grid = denormalize(torch.cat((imgs_lr, gen_hr), -1))
+                save_image(img_grid, "images/training/%d.png" % batches_done, nrow=1, normalize=False)
 
-        # Adversarial loss (relativistic average GAN)
-        loss_GAN = criterion_GAN(pred_fake - pred_real.mean(0, keepdim=True), valid)
-
-        # Content loss
-        gen_features = feature_extractor(gen_hr)
-        real_features = feature_extractor(imgs_hr).detach()
-        loss_content = criterion_content(gen_features, real_features)
-
-        # Total generator loss
-        loss_G = loss_content + opt.lambda_adv * loss_GAN + opt.lambda_pixel * loss_pixel
-
-        loss_G.backward()
-        optimizer_G.step()
-
-        # ---------------------
-        #  Train Discriminator
-        # ---------------------
-
-        optimizer_D.zero_grad()
-
-        pred_real = discriminator(imgs_hr)
-        pred_fake = discriminator(gen_hr.detach())
-
-        # Adversarial loss for real and fake images (relativistic average GAN)
-        loss_real = criterion_GAN(pred_real - pred_fake.mean(0, keepdim=True), valid)
-        loss_fake = criterion_GAN(pred_fake - pred_real.mean(0, keepdim=True), fake)
-
-        # Total loss
-        loss_D = (loss_real + loss_fake) / 2
-
-        loss_D.backward()
-        optimizer_D.step()
-
-        # --------------
-        #  Log Progress
-        # --------------
-
-        print(
-            "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f, content: %f, adv: %f, pixel: %f]"
-            % (
-                epoch,
-                opt.n_epochs,
-                i,
-                len(dataloader),
-                loss_D.item(),
-                loss_G.item(),
-                loss_content.item(),
-                loss_GAN.item(),
-                loss_pixel.item(),
-            )
-        )
-
-        if batches_done % opt.sample_interval == 0:
-            # Save image grid with upsampled inputs and ESRGAN outputs
-            imgs_lr = nn.functional.interpolate(imgs_lr, scale_factor=4)
-            img_grid = denormalize(torch.cat((imgs_lr, gen_hr), -1))
-            save_image(img_grid, "images/training/%d.png" % batches_done, nrow=1, normalize=False)
-
-        if batches_done % opt.checkpoint_interval == 0:
-            # Save model checkpoints
-            torch.save(generator.state_dict(), "saved_models/generator_%d.pth" % epoch)
-            torch.save(discriminator.state_dict(), "saved_models/discriminator_%d.pth" %epoch)
+            if batches_done % opt.checkpoint_interval == 0:
+                # Save model checkpoints
+                torch.save(generator.state_dict(), "saved_models/generator_%d.pth" % epoch)
+                torch.save(discriminator.state_dict(), "saved_models/discriminator_%d.pth" %epoch)
